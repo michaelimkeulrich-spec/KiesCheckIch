@@ -33,7 +33,7 @@ async function loadChildFinance(){if(!children.length){$('#childFinance').innerH
  $('#childFinance').innerHTML=children.map(c=>{const t=all.filter(x=>x.user_id===c.user_id),g=gs.filter(x=>x.user_id===c.user_id),sum=t.reduce((s,x)=>s+(x.kind==='income'?1:-1)*Number(x.amount_cents),0);return `<details><summary><b>Kind ${safe(c.user_id.slice(0,8))}</b> · ${money(sum)} · ${t.length} Buchungen</summary><h4>Buchungen</h4>${renderTx(t)}<h4>Sparziele</h4>${g.map(x=>`<p>${safe(x.title)}: ${money(x.saved_cents)} / ${money(x.target_cents)}</p>`).join('')||'Keine'}</details>`}).join('');}
 async function loadFeedback(){const f=await check(db.from('kc_feedback').select('id,category,message,state,created_at').eq('user_id',user.id).order('created_at',{ascending:false}).limit(50));$('#myFeedback').innerHTML=f.map(x=>`<div class="item"><div><b>${safe(x.category)} · ${safe(x.state)}</b><p>${safe(x.message)}</p></div></div>`).join('')||'<p class="muted">Noch kein Feedback.</p>';}
 async function loadAdminFeedback(){if(!isAdmin)return;const f=await check(db.from('kc_feedback').select('id,category,message,state,created_at').order('created_at',{ascending:false}).limit(100));$('#adminFeedback').innerHTML=f.map(x=>`<div class="item"><div><b>${safe(x.category)}</b> · ${safe(x.state)}<p>${safe(x.message)}</p></div><select data-feedback="${x.id}"><option value="offen" ${x.state==='offen'?'selected':''}>Offen</option><option value="in_arbeit" ${x.state==='in_arbeit'?'selected':''}>In Arbeit</option><option value="erledigt" ${x.state==='erledigt'?'selected':''}>Erledigt</option></select></div>`).join('')||'<p class="muted">Noch kein Feedback.</p>';document.querySelectorAll('[data-feedback]').forEach(el=>el.onchange=async()=>{try{await check(db.from('kc_feedback').update({state:el.value}).eq('id',el.dataset.feedback));msg('Status gespeichert')}catch(e){msg(e.message,true)}})}
-async function showSession(s){user=s?.user||null;$('#loginPanel').hidden=!!user;$('#app').hidden=!user;if(!user)return;$('#signedIn').textContent=user.email;
+async function showSession(s){if(recoveryMode){$('#loginPanel').hidden=false;$('#authForm').hidden=true;$('#app').hidden=true;return}user=s?.user||null;$('#loginPanel').hidden=!!user;$('#app').hidden=!user;if(!user)return;$('#signedIn').textContent=user.email;
  try{const a=await check(db.from('app_admins').select('user_id').eq('user_id',user.id));isAdmin=a.length>0;$('#adminTab').hidden=!isAdmin;await loadMoney();await loadFamily();
  const pending=getPendingInvite();
  if(pending?.token && (!pending.email || pending.email===user.email?.toLowerCase())){
@@ -61,7 +61,7 @@ $('#forgotPassword').onclick=async()=>{try{
 $('#resetPasswordForm').onsubmit=async e=>{e.preventDefault();try{
  const password=String(new FormData(e.target).get('new_password'));
  const {error}=await db.auth.updateUser({password});if(error)throw error;
- recoveryMode=false;$('#resetPasswordForm').hidden=true;history.replaceState(null,'',location.pathname);msg('Neues Passwort gespeichert.');
+ recoveryMode=false;$('#resetPasswordForm').hidden=true;history.replaceState(null,'',location.pathname);const {error:signOutError}=await db.auth.signOut();if(signOutError)throw signOutError;$('#authForm').hidden=false;$('#loginPanel').hidden=false;$('#app').hidden=true;msg('Passwort erfolgreich geändert. Bitte mit dem neuen Passwort anmelden.');
 }catch(err){msg(err.message,true)}};
 $('#logout').onclick=async()=>{const {error}=await db.auth.signOut();msg(error?error.message:'Abgemeldet.',!!error)};
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('.tab').forEach(x=>x.hidden=x.id!==b.dataset.tab)});
@@ -86,7 +86,7 @@ if(inviteToken){
 }
 const recoveryInUrl=()=>{const q=new URLSearchParams(location.search),h=new URLSearchParams(location.hash.slice(1));return q.get('type')==='recovery'||h.get('type')==='recovery'};
 let recoveryMode=recoveryInUrl();
-const showRecovery=()=>{recoveryMode=true;$('#resetPasswordForm').hidden=false;$('#loginPanel').hidden=false;msg('Bitte jetzt ein neues Passwort festlegen.')};
+const showRecovery=()=>{recoveryMode=true;$('#resetPasswordForm').hidden=false;$('#authForm').hidden=true;$('#loginPanel').hidden=false;$('#app').hidden=true;msg('Bitte jetzt ein neues Passwort festlegen.')};
 if(recoveryMode)showRecovery();
 db.auth.onAuthStateChange((event,s)=>{if(event==='PASSWORD_RECOVERY')showRecovery();setTimeout(()=>{showSession(s);if(recoveryMode)showRecovery()},0)});
 db.auth.getSession().then(({data,error})=>{if(error)msg(error.message,true);else{showSession(data.session);if(recoveryMode)showRecovery()}});

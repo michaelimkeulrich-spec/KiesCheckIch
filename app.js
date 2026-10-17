@@ -44,7 +44,7 @@ async function loadFamily(){families=await check(db.from('kc_family_parents').se
  }else{
    document.getElementById('childFamilyInfo')?.remove();
    if(nameEditor.parentElement!==$('#family'))$('#family').insertBefore(nameEditor,$('#familyList').nextSibling);
-   $('#acceptBox').hidden=false;
+   $('#acceptBox').hidden=!!families.length;
  }
  $('#parentBox').hidden=!families.length;$('#familyChoice').innerHTML=families.map(f=>`<option value="${f.family_id}">${safe(f.kc_families?.name||'Familie')}</option>`).join('');
  const childNames=children.length?await check(db.from('profiles').select('id,display_name').in('id',children.map(c=>c.user_id))):[];
@@ -61,11 +61,18 @@ const nameEditor=document.createElement('form');
 nameEditor.id='myNameForm';
 nameEditor.innerHTML='<h3>Mein Name</h3><label>Name des Kindes / Anzeigename<input name="display_name" maxlength="80" required placeholder="Name eingeben"></label><button type="submit">Namen speichern</button>';
 $('#familyList').parentNode.insertBefore(nameEditor,$('#familyList').nextSibling);
-nameEditor.onsubmit=async e=>{e.preventDefault();try{const display_name=String(new FormData(nameEditor).get('display_name')||'').trim();if(!display_name)throw Error('Bitte einen Namen eingeben.');const {error}=await db.from('profiles').upsert({id:user.id,display_name},{onConflict:'id'});if(error)throw error;msg('Name gespeichert.');await loadFamily()}catch(err){msg('Name konnte nicht gespeichert werden: '+err.message,true)}};
+nameEditor.onsubmit=async e=>{e.preventDefault();try{const display_name=String(new FormData(nameEditor).get('display_name')||'').trim();if(!display_name)throw Error('Bitte einen Namen eingeben.');const {error}=await db.from('profiles').upsert({id:user.id,display_name},{onConflict:'id'});if(error)throw error;msg('Name gespeichert.');$('#signedIn').textContent=display_name;const greeting=document.getElementById('personalGreeting');if(greeting)greeting.textContent='Hallo, '+display_name+'!';await loadFamily()}catch(err){msg('Name konnte nicht gespeichert werden: '+err.message,true)}};
 const invitePanel=document.createElement('section');invitePanel.className='card';invitePanel.id='inviteGuidance';invitePanel.hidden=true;$('#loginPanel').parentNode.insertBefore(invitePanel,$('#loginPanel'));
 const inviteGuidance=(html,canSwitch=false)=>{invitePanel.hidden=false;invitePanel.innerHTML='<h2>Persönliche Einladung</h2><p>'+html+'</p>'+(canSwitch?'<button type="button" id="switchInviteAccount">Mit eingeladenem Konto fortfahren</button>':'');const b=$('#switchInviteAccount');if(b)b.onclick=async()=>{b.disabled=true;const {error}=await db.auth.signOut();if(error){msg(error.message,true);b.disabled=false;return}inviteGuidance('Bitte mit der E-Mail-Adresse aus der Einladung anmelden oder ein neues Konto erstellen. Die Einladung bleibt erhalten.');$('#authForm').hidden=false;$('#loginPanel').hidden=false;$('#authForm [name=email]').focus()}};
 async function showSession(s){if(recoveryMode){$('#loginPanel').hidden=false;$('#authForm').hidden=true;$('#app').hidden=true;return}user=s?.user||null;$('#loginPanel').hidden=!!user;$('#app').hidden=!user;const pendingBefore=getPendingInvite();invitePanel.hidden=true;if(!user){if(pendingBefore?.token)inviteGuidance('Dein Einladungslink ist gespeichert. Melde dich mit der eingeladenen E-Mail-Adresse an oder erstelle damit ein neues Konto. Nach Bestätigung der E-Mail wird die Einladung angenommen.');return}$('#signedIn').textContent=user.email;
- try{const {data:ownProfile}=await db.from('profiles').select('display_name').eq('id',user.id).maybeSingle();nameEditor.querySelector('input').value=ownProfile?.display_name||''}catch{}if(pendingBefore?.token)inviteGuidance('Angemeldet als <b>'+safe(user.email)+'</b>. Ist das nicht die eingeladene E-Mail-Adresse, wechsle hier das Konto.',true);
+ try{const {data:ownProfile}=await db.from('profiles').select('display_name').eq('id',user.id).maybeSingle();
+ const displayName=String(ownProfile?.display_name||'').trim();
+ nameEditor.querySelector('input').value=displayName;
+ $('#signedIn').textContent=displayName||user.email;
+ const greeting=document.getElementById('personalGreeting')||document.createElement('h2');
+ greeting.id='personalGreeting';greeting.textContent=displayName?'Hallo, '+displayName+'!':'Hallo!';
+ $('#home').insertBefore(greeting,$('#home').firstChild);
+ }catch{}if(pendingBefore?.token)inviteGuidance('Angemeldet als <b>'+safe(user.email)+'</b>. Ist das nicht die eingeladene E-Mail-Adresse, wechsle hier das Konto.',true);
  try{const a=await check(db.from('app_admins').select('user_id').eq('user_id',user.id));isAdmin=a.length>0;$('#adminTab').hidden=!isAdmin;await loadMoney();await loadFamily();
  const pending=getPendingInvite();
  if(pending?.token && (!pending.email || pending.email===user.email?.toLowerCase())){

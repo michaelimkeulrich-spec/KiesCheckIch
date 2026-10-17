@@ -61,7 +61,7 @@ $('#forgotPassword').onclick=async()=>{try{
 $('#resetPasswordForm').onsubmit=async e=>{e.preventDefault();try{
  const password=String(new FormData(e.target).get('new_password'));
  const {error}=await db.auth.updateUser({password});if(error)throw error;
- $('#resetPasswordForm').hidden=true;msg('Neues Passwort gespeichert.');
+ recoveryMode=false;$('#resetPasswordForm').hidden=true;history.replaceState(null,'',location.pathname);msg('Neues Passwort gespeichert.');
 }catch(err){msg(err.message,true)}};
 $('#logout').onclick=async()=>{const {error}=await db.auth.signOut();msg(error?error.message:'Abgemeldet.',!!error)};
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('.tab').forEach(x=>x.hidden=x.id!==b.dataset.tab)});
@@ -84,5 +84,10 @@ if(inviteToken){
 }else{
  const pending=getPendingInvite();if(pending?.token)$('#inviteToken').value=pending.token;
 }
-db.auth.getSession().then(({data,error})=>error?msg(error.message,true):showSession(data.session));db.auth.onAuthStateChange((event,s)=>{if(event==='PASSWORD_RECOVERY'){setTimeout(()=>{$('#resetPasswordForm').hidden=false;msg('Bitte ein neues Passwort vergeben.');},0)}setTimeout(()=>showSession(s),0)});
+const recoveryInUrl=()=>{const q=new URLSearchParams(location.search),h=new URLSearchParams(location.hash.slice(1));return q.get('type')==='recovery'||h.get('type')==='recovery'};
+let recoveryMode=recoveryInUrl();
+const showRecovery=()=>{recoveryMode=true;$('#resetPasswordForm').hidden=false;$('#loginPanel').hidden=false;msg('Bitte jetzt ein neues Passwort festlegen.')};
+if(recoveryMode)showRecovery();
+db.auth.onAuthStateChange((event,s)=>{if(event==='PASSWORD_RECOVERY')showRecovery();setTimeout(()=>{showSession(s);if(recoveryMode)showRecovery()},0)});
+db.auth.getSession().then(({data,error})=>{if(error)msg(error.message,true);else{showSession(data.session);if(recoveryMode)showRecovery()}});
 })();

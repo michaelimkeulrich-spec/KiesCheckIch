@@ -1,4 +1,9 @@
 (()=>{'use strict';
+// Einladungen in eigenständiger Sitzung öffnen; Eltern-Anmeldung bleibt erhalten.
+const invitation=new URLSearchParams(location.search).get('invite');
+if(invitation){location.replace('/einladung.html?invite='+encodeURIComponent(invitation));return}
+// Alte, automatisch angenommene Einladungen nicht erneut auf dem Elternkonto versuchen.
+localStorage.removeItem('kc_pending_invite');
 const URL='https://dlvcfaplkidgcsvyiiai.supabase.co',KEY='sb_publishable_vd7Fkm2Ze8WJPo7XBEPPSA_zTl8NKMN';
 const $=s=>document.querySelector(s),safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=n=>new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).format(Number(n)/100);

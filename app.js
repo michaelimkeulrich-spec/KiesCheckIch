@@ -29,6 +29,23 @@ async function loadMoney(){[tx,goals,cats]=await Promise.all([
 function renderCategories(){const kind=$('#txForm [name=kind]').value;const list=cats.filter(c=>c.kind===kind);$('#category').innerHTML=list.map(c=>`<option value="${safe(c.name)}">${safe(c.name)}</option>`).join('')||'<option>Sonstiges</option>'}
 async function loadFamily(){families=await check(db.from('kc_family_parents').select('family_id,kc_families(id,name)').eq('user_id',user.id));children=await check(db.from('kc_family_children').select('user_id,birth_date,family_id').in('family_id',families.length?families.map(f=>f.family_id):['00000000-0000-0000-0000-000000000000']));
  $('#familyList').innerHTML=families.length?families.map(f=>`<p><b>${safe(f.kc_families?.name||'Familie')}</b> – ${children.filter(c=>c.family_id===f.family_id).length} Kinder angemeldet</p>`).join(''):'<p class="muted">Noch kein Elternkonto verknüpft. Falls du eingeladen wurdest, löse unten deinen Einladungscode ein.</p>';
+ const ownChildRows=await check(db.from('kc_family_children').select('family_id,birth_date').eq('user_id',user.id));
+ const isChild=ownChildRows.length>0 && families.length===0;
+ const familyTab=document.querySelector('[data-tab="family"]');
+ familyTab.hidden=isChild;
+ if(isChild){
+   const familyInfo=document.getElementById('childFamilyInfo')||document.createElement('div');
+   familyInfo.id='childFamilyInfo';
+   familyInfo.innerHTML='<h3>Mein Familienkonto</h3><p>Du bist mit einer Familie verbunden. Deine Eltern verwalten die Familienkonten.</p>';
+   $('#home').appendChild(familyInfo);
+   if(nameEditor.parentElement!==$('#home'))$('#home').appendChild(nameEditor);
+   $('#acceptBox').hidden=true;
+   if($('#family').hidden){document.querySelector('[data-tab="home"]').click()}
+ }else{
+   document.getElementById('childFamilyInfo')?.remove();
+   if(nameEditor.parentElement!==$('#family'))$('#family').insertBefore(nameEditor,$('#familyList').nextSibling);
+   $('#acceptBox').hidden=false;
+ }
  $('#parentBox').hidden=!families.length;$('#familyChoice').innerHTML=families.map(f=>`<option value="${f.family_id}">${safe(f.kc_families?.name||'Familie')}</option>`).join('');
  const childNames=children.length?await check(db.from('profiles').select('id,display_name').in('id',children.map(c=>c.user_id))):[];
  const namesById=new Map(childNames.map(p=>[p.id,p.display_name]));

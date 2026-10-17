@@ -5,7 +5,11 @@ const money=n=>new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).
 const cents=v=>{const s=String(v).trim().replace(/\s/g,'').replace(',','.');if(!/^\d+(\.\d{1,2})?$/.test(s))throw Error('Bitte gültigen Betrag eingeben');const n=Math.round(Number(s)*100);if(!Number.isSafeInteger(n))throw Error('Betrag zu groß');return n};
 const msg=(s,error=false)=>{$('#status').textContent=s;$('#status').classList.toggle('error',error);if(error)window.scrollTo({top:0,behavior:'smooth'})};
 if(!window.supabase){msg('Supabase konnte nicht geladen werden. Internet prüfen.',true);return}
-const db=window.supabase.createClient(URL,KEY);let user=null,tx=[],goals=[],cats=[],families=[],children=[],isAdmin=false;
+const db=window.supabase.createClient(URL,KEY);
+const pendingKey='kc_pending_invite';
+const getPendingInvite=()=>{try{return JSON.parse(localStorage.getItem(pendingKey)||'null')}catch{return null}};
+const clearPendingInvite=()=>localStorage.removeItem(pendingKey);
+let user=null,tx=[],goals=[],cats=[],families=[],children=[],isAdmin=false;
 const invoke=async(action,body={})=>{const {data,error}=await db.functions.invoke('admin-api',{body:{action,...body}});if(error)throw Error(data?.error||error.message);if(data?.error)throw Error(data.error);return data};
 const check=async(p)=>{const {data,error}=await p;if(error)throw Error(error.message);return data};
 const today=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')};
@@ -30,10 +34,23 @@ async function loadChildFinance(){if(!children.length){$('#childFinance').innerH
 async function loadFeedback(){const f=await check(db.from('kc_feedback').select('id,category,message,state,created_at').eq('user_id',user.id).order('created_at',{ascending:false}).limit(50));$('#myFeedback').innerHTML=f.map(x=>`<div class="item"><div><b>${safe(x.category)} · ${safe(x.state)}</b><p>${safe(x.message)}</p></div></div>`).join('')||'<p class="muted">Noch kein Feedback.</p>';}
 async function loadAdminFeedback(){if(!isAdmin)return;const f=await check(db.from('kc_feedback').select('id,category,message,state,created_at').order('created_at',{ascending:false}).limit(100));$('#adminFeedback').innerHTML=f.map(x=>`<div class="item"><div><b>${safe(x.category)}</b> · ${safe(x.state)}<p>${safe(x.message)}</p></div><select data-feedback="${x.id}"><option value="offen" ${x.state==='offen'?'selected':''}>Offen</option><option value="in_arbeit" ${x.state==='in_arbeit'?'selected':''}>In Arbeit</option><option value="erledigt" ${x.state==='erledigt'?'selected':''}>Erledigt</option></select></div>`).join('')||'<p class="muted">Noch kein Feedback.</p>';document.querySelectorAll('[data-feedback]').forEach(el=>el.onchange=async()=>{try{await check(db.from('kc_feedback').update({state:el.value}).eq('id',el.dataset.feedback));msg('Status gespeichert')}catch(e){msg(e.message,true)}})}
 async function showSession(s){user=s?.user||null;$('#loginPanel').hidden=!!user;$('#app').hidden=!user;if(!user)return;$('#signedIn').textContent=user.email;
- try{const a=await check(db.from('app_admins').select('user_id').eq('user_id',user.id));isAdmin=a.length>0;$('#adminTab').hidden=!isAdmin;await loadMoney();await loadFamily();await loadFeedback();if(isAdmin)await loadAdminFeedback();}catch(e){msg('Daten konnten nicht geladen werden: '+e.message,true)}}
+ try{const a=await check(db.from('app_admins').select('user_id').eq('user_id',user.id));isAdmin=a.length>0;$('#adminTab').hidden=!isAdmin;await loadMoney();await loadFamily();
+ const pending=getPendingInvite();
+ if(pending?.token && (!pending.email || pending.email===user.email?.toLowerCase())){
+  $('#inviteToken').value=pending.token;
+  try{
+   await invoke('accept_invite',{invite_token:pending.token,family_name:'Meine Familie'});
+   clearPendingInvite();await loadFamily();msg('Einladung angenommen. Willkommen in deiner Familie!');
+  }catch(e){
+   if(/Geburtsdatum ungültig/.test(e.message)){
+    msg('Fast geschafft: Bitte unter Familie dein Geburtsdatum eintragen und die Einladung bestätigen.');
+   }else{msg('Einladung noch nicht angenommen: '+e.message,true)}
+  }
+ }
+ await loadFeedback();if(isAdmin)await loadAdminFeedback();}catch(e){msg('Daten konnten nicht geladen werden: '+e.message,true)}}
 async function submit(e,fn){e.preventDefault();try{await fn(new FormData(e.target));msg('Gespeichert.');}catch(err){msg(err.message,true)}}
 $('#authForm').onsubmit=e=>submit(e,async f=>{await check(db.auth.signInWithPassword({email:f.get('email'),password:f.get('password')}));msg('Angemeldet.')});
-$('#register').onclick=async()=>{try{const f=new FormData($('#authForm'));if(!inviteToken)throw Error('Registrierung nur mit persönlichem Einladungslink.');const {error}=await db.auth.signUp({email:f.get('email'),password:f.get('password')});if(error)throw error;msg('Registrierung gestartet. Bitte E-Mail bestätigen und danach anmelden.')}catch(e){msg(e.message,true)}};
+$('#register').onclick=async()=>{try{const f=new FormData($('#authForm'));if(!getPendingInvite()?.token)throw Error('Registrierung nur mit persönlichem Einladungslink.');const {error}=await db.auth.signUp({email:f.get('email'),password:f.get('password')});if(error)throw error;const pending=getPendingInvite();if(pending){pending.email=String(f.get('email')).trim().toLowerCase();localStorage.setItem(pendingKey,JSON.stringify(pending))}msg('Registrierung gestartet. Bitte E-Mail bestätigen und danach anmelden.')}catch(e){msg(e.message,true)}};
 $('#logout').onclick=async()=>{const {error}=await db.auth.signOut();msg(error?error.message:'Abgemeldet.',!!error)};
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('.tab').forEach(x=>x.hidden=x.id!==b.dataset.tab)});
 $('#txForm [name=booked_on]').value=today();$('#txForm [name=kind]').onchange=renderCategories;
@@ -44,9 +61,16 @@ const link=token=>`${location.origin}${location.pathname}?invite=${encodeURIComp
 const showLink=(id,token)=>{$(id).innerHTML=`<p class="invite"><b>Persönlicher Einladungslink:</b><br><a href="${safe(link(token))}">${safe(link(token))}</a></p><p class="warning">Link nur an die eingeladene Person weitergeben. Nach 7 Tagen ungültig.</p>`};
 $('#parentInvite').onsubmit=e=>submit(e,async f=>{const d=await invoke('invite_parent',{email:f.get('email')});showLink('#parentInviteResult',d.invite_token)});
 $('#childInvite').onsubmit=e=>submit(e,async f=>{const d=await invoke('invite_child',{family_id:f.get('family_id'),email:f.get('email')});showLink('#childInviteResult',d.invite_token)});
-$('#acceptForm').onsubmit=e=>submit(e,async f=>{await invoke('accept_invite',{invite_token:f.get('token'),family_name:f.get('family_name'),birth_date:f.get('birth_date')});await loadFamily();msg('Einladung angenommen!')});
+$('#acceptForm').onsubmit=e=>submit(e,async f=>{await invoke('accept_invite',{invite_token:f.get('token'),family_name:f.get('family_name'),birth_date:f.get('birth_date')});clearPendingInvite();await loadFamily();msg('Einladung angenommen!')});
 $('#childSetup').onsubmit=e=>submit(e,async f=>{const child=f.get('child_id'),family=children.find(c=>c.user_id===child)?.family_id;if(!family)throw Error('Bitte Kind auswählen');if(!confirm('Startguthaben und Taschengeld für dieses Kind speichern? Nur einmal ausführen.'))return;await invoke('setup_child',{child_id:child,family_id:family,start_cents:cents(f.get('start')),allowance_cents:cents(f.get('allowance'))});await loadChildFinance()});
 $('#loadUsers').onclick=async()=>{try{const data=await invoke('admin_users');$('#users').innerHTML=data.users.map(u=>`<div class="item"><div><b>${safe(u.email)}</b><br><small>${safe(u.id)}</small></div><div><button data-delete-data="${u.id}" class="secondary">Finanzen zurücksetzen</button> <button data-delete-account="${u.id}">Konto löschen</button></div></div>`).join('');document.querySelectorAll('[data-delete-data],[data-delete-account]').forEach(b=>b.onclick=async()=>{const id=b.dataset.deleteData||b.dataset.deleteAccount,act=b.dataset.deleteAccount?'delete_account':'delete_child_data';const typed=prompt(`ACHTUNG: ${act==='delete_account'?'Konto und Daten':'Alle Finanzdaten'} unwiderruflich löschen!\nZur Bestätigung exakt eingeben:\nLOESCHEN ${id}`);if(typed!==`LOESCHEN ${id}`){msg('Abgebrochen');return}try{await invoke(act,{target_id:id,confirm:typed});msg('Löschvorgang ausgeführt.');$('#loadUsers').click()}catch(e){msg(e.message,true)}})}catch(e){msg(e.message,true)}};
-const inviteToken=new URLSearchParams(location.search).get('invite');if(inviteToken){$('#inviteToken').value=inviteToken;history.replaceState(null,'',location.pathname)}
+const inviteToken=new URLSearchParams(location.search).get('invite');
+if(inviteToken){
+ localStorage.setItem(pendingKey,JSON.stringify({token:inviteToken,email:null}));
+ $('#inviteToken').value=inviteToken;
+ history.replaceState(null,'',location.pathname);
+}else{
+ const pending=getPendingInvite();if(pending?.token)$('#inviteToken').value=pending.token;
+}
 db.auth.getSession().then(({data,error})=>error?msg(error.message,true):showSession(data.session));db.auth.onAuthStateChange((_event,s)=>setTimeout(()=>showSession(s),0));
 })();

@@ -10,7 +10,7 @@ const pendingKey='kc_pending_invite';
 const getPendingInvite=()=>{try{return JSON.parse(localStorage.getItem(pendingKey)||'null')}catch{return null}};
 const clearPendingInvite=()=>localStorage.removeItem(pendingKey);
 let user=null,tx=[],goals=[],cats=[],families=[],children=[],isAdmin=false;
-const invoke=async(action,body={})=>{const {data,error}=await db.functions.invoke('admin-api',{body:{action,...body}});if(error)throw Error(data?.error||error.message);if(data?.error)throw Error(data.error);return data};
+const invoke=async(action,body={})=>{const {data,error}=await db.functions.invoke('admin-api',{body:{action,...body}});if(error){let detail=data?.error;if(!detail&&error.context?.json){try{const result=await error.context.json();detail=result?.error}catch{}}throw Error(detail||error.message)}if(data?.error)throw Error(data.error);return data};
 const check=async(p)=>{const {data,error}=await p;if(error)throw Error(error.message);return data};
 const today=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')};
 const renderTx=items=>items.length?items.map(t=>`<div class="item"><span><b>${safe(t.category)}</b><br><small>${safe(t.booked_on)} · ${safe(t.note)}</small></span><b>${t.kind==='income'?'+':'−'}${money(t.amount_cents)}</b></div>`).join(''):'<p class="muted">Noch keine Buchungen.</p>';
@@ -44,7 +44,7 @@ async function showSession(s){if(recoveryMode){$('#loginPanel').hidden=false;$('
   }catch(e){
    if(/Geburtsdatum ungültig/.test(e.message)){
     msg('Fast geschafft: Bitte unter Familie dein Geburtsdatum eintragen und die Einladung bestätigen.');
-   }else{msg('Einladung noch nicht angenommen: '+e.message,true)}
+   }else if(/nicht für diese E-Mail|abgelaufen/i.test(e.message)){msg('Einladung kann mit '+user.email+' nicht angenommen werden. Bitte abmelden und mit der eingeladenen E-Mail-Adresse anmelden. Die Einladung bleibt gespeichert.',true)}else{msg('Einladung noch nicht angenommen: '+e.message,true)}
   }
  }
  await loadFeedback();if(isAdmin)await loadAdminFeedback();}catch(e){msg('Daten konnten nicht geladen werden: '+e.message,true)}}
@@ -81,7 +81,7 @@ resetForm.onsubmit=async e=>{e.preventDefault();
  }catch(err){resetNotice('Passwort konnte nicht gespeichert werden: '+(err?.message||String(err)),true)}
  finally{button.disabled=false;button.textContent='Neues Passwort speichern'}
 };
-$('#logout').onclick=async()=>{const {error}=await db.auth.signOut();msg(error?error.message:'Abgemeldet.',!!error)};
+$('#logout').onclick=async()=>{const {error}=await db.auth.signOut();msg(error?error.message:(getPendingInvite()?.token?'Abgemeldet. Jetzt mit der eingeladenen E-Mail-Adresse anmelden oder registrieren.':'Abgemeldet.'),!!error)};
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('.tab').forEach(x=>x.hidden=x.id!==b.dataset.tab)});
 $('#txForm [name=booked_on]').value=today();$('#txForm [name=kind]').onchange=renderCategories;
 $('#txForm').onsubmit=e=>submit(e,async f=>{const n=cents(f.get('amount'));if(!n)throw Error('Betrag muss größer als 0 sein');await check(db.from('transactions').insert({user_id:user.id,kind:f.get('kind'),amount_cents:n,category:f.get('category'),note:f.get('note'),booked_on:f.get('booked_on')}));e.target.reset();$('#txForm [name=booked_on]').value=today();await loadMoney()});

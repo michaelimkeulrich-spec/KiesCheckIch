@@ -1,0 +1,9 @@
+KiesCheckIch – Update: Automatische Einladungsmails und Passwort vergessen
+
+1. GitHub: index.html und app.js im Stammverzeichnis des Repositories ersetzen. Vercel veröffentlicht diese Dateien automatisch.
+2. Supabase: Edge Function admin-api mit der beiliegenden Datei admin-api-index.ts aktualisieren. Wichtig: JWT-Gateway-Prüfung AUS lassen (verify_jwt=false), denn die Funktion prüft die Benutzer-JWT selbst.
+3. Supabase Dashboard > Edge Functions > Secrets: RESEND_API_KEY als neues Secret mit deinem Resend-API-Schlüssel anlegen. API-Schlüssel niemals in GitHub oder im Browser-Code speichern.
+4. Der Absender lautet einladung@kiescheckich.de. Die Empfänger-E-Mail wird auf dem Server aus der Einladung verwendet.
+5. Test: Elternkonto lädt Einladung -> Mail kommt an; Login-Seite -> Passwort vergessen -> Recovery-Mail -> Link -> neues Passwort.
+
+Wichtig: Dies ist ein Prototyp. Die Auth-Registrierung ist serverseitig noch nicht einladungsgebunden; deshalb keine echten Minderjährigen oder Echtdaten verwenden. Konto-Löschung bleibt im mitgelieferten Servercode absichtlich deaktiviert. Bestehende Daten nicht löschen.

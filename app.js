@@ -51,6 +51,18 @@ async function showSession(s){user=s?.user||null;$('#loginPanel').hidden=!!user;
 async function submit(e,fn){e.preventDefault();try{await fn(new FormData(e.target));msg('Gespeichert.');}catch(err){msg(err.message,true)}}
 $('#authForm').onsubmit=e=>submit(e,async f=>{await check(db.auth.signInWithPassword({email:f.get('email'),password:f.get('password')}));msg('Angemeldet.')});
 $('#register').onclick=async()=>{try{const f=new FormData($('#authForm'));if(!getPendingInvite()?.token)throw Error('Registrierung nur mit persönlichem Einladungslink.');const {error}=await db.auth.signUp({email:f.get('email'),password:f.get('password')});if(error)throw error;const pending=getPendingInvite();if(pending){pending.email=String(f.get('email')).trim().toLowerCase();localStorage.setItem(pendingKey,JSON.stringify(pending))}msg('Registrierung gestartet. Bitte E-Mail bestätigen und danach anmelden.')}catch(e){msg(e.message,true)}};
+$('#forgotPassword').onclick=async()=>{try{
+ const email=String(new FormData($('#authForm')).get('email')||'').trim();
+ if(!email)throw Error('Bitte zuerst deine E-Mail-Adresse eingeben.');
+ const {error}=await db.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname});
+ if(error)throw error;
+ msg('Falls ein Konto existiert, erhältst du eine E-Mail zum Zurücksetzen des Passworts.');
+}catch(e){msg(e.message,true)}};
+$('#resetPasswordForm').onsubmit=async e=>{e.preventDefault();try{
+ const password=String(new FormData(e.target).get('new_password'));
+ const {error}=await db.auth.updateUser({password});if(error)throw error;
+ $('#resetPasswordForm').hidden=true;msg('Neues Passwort gespeichert.');
+}catch(err){msg(err.message,true)}};
 $('#logout').onclick=async()=>{const {error}=await db.auth.signOut();msg(error?error.message:'Abgemeldet.',!!error)};
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('.tab').forEach(x=>x.hidden=x.id!==b.dataset.tab)});
 $('#txForm [name=booked_on]').value=today();$('#txForm [name=kind]').onchange=renderCategories;
@@ -59,8 +71,8 @@ $('#goalForm').onsubmit=e=>submit(e,async f=>{const n=cents(f.get('target'));if(
 $('#feedbackForm').onsubmit=e=>submit(e,async f=>{await check(db.from('kc_feedback').insert({user_id:user.id,category:f.get('category'),message:f.get('message')}));e.target.reset();await loadFeedback();if(isAdmin)await loadAdminFeedback()});
 const link=token=>`${location.origin}${location.pathname}?invite=${encodeURIComponent(token)}`;
 const showLink=(id,token)=>{$(id).innerHTML=`<p class="invite"><b>Persönlicher Einladungslink:</b><br><a href="${safe(link(token))}">${safe(link(token))}</a></p><p class="warning">Link nur an die eingeladene Person weitergeben. Nach 7 Tagen ungültig.</p>`};
-$('#parentInvite').onsubmit=e=>submit(e,async f=>{const d=await invoke('invite_parent',{email:f.get('email')});showLink('#parentInviteResult',d.invite_token)});
-$('#childInvite').onsubmit=e=>submit(e,async f=>{const d=await invoke('invite_child',{family_id:f.get('family_id'),email:f.get('email')});showLink('#childInviteResult',d.invite_token)});
+$('#parentInvite').onsubmit=e=>submit(e,async f=>{const d=await invoke('invite_parent',{email:f.get('email')});showLink('#parentInviteResult',d.invite_token);msg(d.email_sent?'Einladung per E-Mail verschickt.':('Link erstellt, E-Mail noch nicht verschickt: '+(d.email_error||'Unbekannter Fehler')),!d.email_sent)});
+$('#childInvite').onsubmit=e=>submit(e,async f=>{const d=await invoke('invite_child',{family_id:f.get('family_id'),email:f.get('email')});showLink('#childInviteResult',d.invite_token);msg(d.email_sent?'Einladung per E-Mail verschickt.':('Link erstellt, E-Mail noch nicht verschickt: '+(d.email_error||'Unbekannter Fehler')),!d.email_sent)});
 $('#acceptForm').onsubmit=e=>submit(e,async f=>{await invoke('accept_invite',{invite_token:f.get('token'),family_name:f.get('family_name'),birth_date:f.get('birth_date')});clearPendingInvite();await loadFamily();msg('Einladung angenommen!')});
 $('#childSetup').onsubmit=e=>submit(e,async f=>{const child=f.get('child_id'),family=children.find(c=>c.user_id===child)?.family_id;if(!family)throw Error('Bitte Kind auswählen');if(!confirm('Startguthaben und Taschengeld für dieses Kind speichern? Nur einmal ausführen.'))return;await invoke('setup_child',{child_id:child,family_id:family,start_cents:cents(f.get('start')),allowance_cents:cents(f.get('allowance'))});await loadChildFinance()});
 $('#loadUsers').onclick=async()=>{try{const data=await invoke('admin_users');$('#users').innerHTML=data.users.map(u=>`<div class="item"><div><b>${safe(u.email)}</b><br><small>${safe(u.id)}</small></div><div><button data-delete-data="${u.id}" class="secondary">Finanzen zurücksetzen</button> <button data-delete-account="${u.id}">Konto löschen</button></div></div>`).join('');document.querySelectorAll('[data-delete-data],[data-delete-account]').forEach(b=>b.onclick=async()=>{const id=b.dataset.deleteData||b.dataset.deleteAccount,act=b.dataset.deleteAccount?'delete_account':'delete_child_data';const typed=prompt(`ACHTUNG: ${act==='delete_account'?'Konto und Daten':'Alle Finanzdaten'} unwiderruflich löschen!\nZur Bestätigung exakt eingeben:\nLOESCHEN ${id}`);if(typed!==`LOESCHEN ${id}`){msg('Abgebrochen');return}try{await invoke(act,{target_id:id,confirm:typed});msg('Löschvorgang ausgeführt.');$('#loadUsers').click()}catch(e){msg(e.message,true)}})}catch(e){msg(e.message,true)}};
@@ -72,5 +84,5 @@ if(inviteToken){
 }else{
  const pending=getPendingInvite();if(pending?.token)$('#inviteToken').value=pending.token;
 }
-db.auth.getSession().then(({data,error})=>error?msg(error.message,true):showSession(data.session));db.auth.onAuthStateChange((_event,s)=>setTimeout(()=>showSession(s),0));
+db.auth.getSession().then(({data,error})=>error?msg(error.message,true):showSession(data.session));db.auth.onAuthStateChange((event,s)=>{if(event==='PASSWORD_RECOVERY'){setTimeout(()=>{$('#resetPasswordForm').hidden=false;msg('Bitte ein neues Passwort vergeben.');},0)}setTimeout(()=>showSession(s),0)});
 })();

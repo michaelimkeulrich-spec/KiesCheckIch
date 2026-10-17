@@ -58,11 +58,29 @@ $('#forgotPassword').onclick=async()=>{try{
  if(error)throw error;
  msg('Falls ein Konto existiert, erhältst du eine E-Mail zum Zurücksetzen des Passworts.');
 }catch(e){msg(e.message,true)}};
-$('#resetPasswordForm').onsubmit=async e=>{e.preventDefault();try{
- const password=String(new FormData(e.target).get('new_password'));
- const {error}=await db.auth.updateUser({password});if(error)throw error;
- recoveryMode=false;$('#resetPasswordForm').hidden=true;history.replaceState(null,'',location.pathname);const {error:signOutError}=await db.auth.signOut();if(signOutError)throw signOutError;$('#authForm').hidden=false;$('#loginPanel').hidden=false;$('#app').hidden=true;msg('Passwort erfolgreich geändert. Bitte mit dem neuen Passwort anmelden.');
-}catch(err){msg(err.message,true)}};
+const resetForm=$('#resetPasswordForm');
+const resetStatus=document.createElement('p');resetStatus.id='resetStatus';resetStatus.setAttribute('role','status');resetStatus.style.marginTop='12px';resetForm.appendChild(resetStatus);
+const resetNotice=(text,isError=false)=>{resetStatus.textContent=text;resetStatus.style.color=isError?'#b42318':'#087f8c';msg(text,isError)};
+resetForm.onsubmit=async e=>{e.preventDefault();
+ const button=resetForm.querySelector('button[type=submit]');
+ const password=String(new FormData(resetForm).get('new_password')||'');
+ if(password.length<8){resetNotice('Das Passwort muss mindestens 8 Zeichen haben.',true);return}
+ button.disabled=true;button.textContent='Passwort wird gespeichert …';resetNotice('Verbindung wird geprüft …');
+ try{
+  const {data:sessionData,error:sessionError}=await db.auth.getSession();
+  if(sessionError)throw sessionError;
+  if(!sessionData.session)throw Error('Der Wiederherstellungslink ist nicht mehr gültig. Bitte fordere eine neue E-Mail an.');
+  resetNotice('Neues Passwort wird gespeichert …');
+  const {error}=await db.auth.updateUser({password});if(error)throw error;
+  resetNotice('Passwort erfolgreich geändert. Du kannst dich jetzt mit dem neuen Passwort anmelden.');
+  recoveryMode=false;resetForm.hidden=true;
+  history.replaceState(null,'',location.pathname);
+  $('#authForm').hidden=false;$('#loginPanel').hidden=false;$('#app').hidden=true;
+  await db.auth.signOut();
+  msg('Passwort erfolgreich geändert. Bitte mit dem neuen Passwort anmelden.');
+ }catch(err){resetNotice('Passwort konnte nicht gespeichert werden: '+(err?.message||String(err)),true)}
+ finally{button.disabled=false;button.textContent='Neues Passwort speichern'}
+};
 $('#logout').onclick=async()=>{const {error}=await db.auth.signOut();msg(error?error.message:'Abgemeldet.',!!error)};
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('.tab').forEach(x=>x.hidden=x.id!==b.dataset.tab)});
 $('#txForm [name=booked_on]').value=today();$('#txForm [name=kind]').onchange=renderCategories;
@@ -87,7 +105,7 @@ if(inviteToken){
 const recoveryInUrl=()=>{const q=new URLSearchParams(location.search),h=new URLSearchParams(location.hash.slice(1));return q.get('type')==='recovery'||h.get('type')==='recovery'};
 let recoveryMode=recoveryInUrl();
 const showRecovery=()=>{recoveryMode=true;$('#resetPasswordForm').hidden=false;$('#authForm').hidden=true;$('#loginPanel').hidden=false;$('#app').hidden=true;msg('Bitte jetzt ein neues Passwort festlegen.')};
-if(recoveryMode)showRecovery();
+if(recoveryMode){showRecovery();resetNotice('Wiederherstellungslink wird geprüft …')}
 db.auth.onAuthStateChange((event,s)=>{if(event==='PASSWORD_RECOVERY')showRecovery();setTimeout(()=>{showSession(s);if(recoveryMode)showRecovery()},0)});
-db.auth.getSession().then(({data,error})=>{if(error)msg(error.message,true);else{showSession(data.session);if(recoveryMode)showRecovery()}});
+db.auth.getSession().then(({data,error})=>{if(error)msg(error.message,true);else{showSession(data.session);if(recoveryMode){showRecovery();resetNotice(data.session?'Link bestätigt. Du kannst dein neues Passwort speichern.':'Der Link ist nicht bestätigt. Bitte fordere eine neue Passwort-E-Mail an.',!data.session)}}});
 })();

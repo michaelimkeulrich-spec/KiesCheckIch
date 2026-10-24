@@ -1,0 +1,10 @@
+KiesCheckIch – Korrektur der Monatsübersicht
+
+1. ZIP entpacken.
+2. Die vorhandene Datei kiescheckich-v16.js in GitHub durch die gleichnamige Datei aus diesem Paket ersetzen.
+3. Commit changes, Vercel-Deployment abwarten, Browser neu laden (ggf. Cache umgehen).
+
+Keine Änderung an index.html oder der Datenbank nötig.
+
+Fehlerursache: Die V1.4-Tabelle wurde erst beim Öffnen von „Einnahmen / Ausgaben“ erzeugt. Die V1.6-Übersicht versuchte, sie vorher zu kopieren.
+Korrektur: Die Monatsübersicht stößt das Laden selbst an und übernimmt die Tabelle und Sparziele, sobald sie vorhanden sind.

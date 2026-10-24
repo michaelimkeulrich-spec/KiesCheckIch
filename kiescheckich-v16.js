@@ -100,20 +100,24 @@ async function dots(){
 function splitMonthly(){
  const monthly=document.getElementById('kc-v14-monthly'),overview=document.getElementById('monthOverview');
  if(!monthly||!overview)return;
- // V1.4 replaces its innerHTML when re-rendering. Move its sections again whenever necessary.
  const cashHeading=[...monthly.querySelectorAll('h3')].find(x=>x.textContent.includes('Cashflow'));
- const goals=document.getElementById('kc-v15-goals');
- if(!cashHeading)return;
+ const goals=monthly.querySelector('#kc-v15-goals');
  let cash=overview.querySelector('#kc-v16-cash');
  if(!cash){cash=document.createElement('div');cash.id='kc-v16-cash';overview.appendChild(cash)}
- cash.replaceChildren();
- cash.appendChild(cashHeading);
- let next=cashHeading.nextSibling;
- while(next&&!(next.nodeType===1&&next.tagName==='H3')){
-  const current=next;next=next.nextSibling;cash.appendChild(current);
+ // Kopieren statt verschieben: V1.4 und V1.5 aktualisieren ihre Originalelemente selbst.
+ // Verschieben führte dazu, dass V1.5 die Ziele in Einnahmen/Ausgaben erneut erzeugte.
+ if(cashHeading){
+  const pieces=[cashHeading];let next=cashHeading.nextElementSibling;
+  while(next&&next.tagName!=='H3'&&next.id!=='kc-v15-goals'){
+   pieces.push(next);next=next.nextElementSibling;
+  }
+  cash.replaceChildren(...pieces.map(x=>x.cloneNode(true)));
+  cashHeading.style.display='none';
+  pieces.slice(1).forEach(x=>x.style.display='none');
  }
- if(goals)overview.insertBefore(goals,cash);
- // Duplicate only the explanatory summary, not the interactive forms.
+ let goalCopy=overview.querySelector('#kc-v16-goals');
+ if(!goalCopy){goalCopy=document.createElement('div');goalCopy.id='kc-v16-goals';overview.insertBefore(goalCopy,cash)}
+ if(goals){goalCopy.innerHTML=goals.innerHTML;goals.style.display='none'}
  let summary=overview.querySelector('#kc-v16-summary');
  if(!summary){summary=document.createElement('div');summary.id='kc-v16-summary';overview.insertBefore(summary,overview.firstChild)}
  const total=[...monthly.querySelectorAll('h3')].find(h=>h.textContent.includes('Aktuelles Vermögen'));
@@ -139,7 +143,7 @@ function observe(){
  const homeEl=document.getElementById('home'),goalsEl=document.getElementById('savings'),monthlyEl=document.getElementById('kc-v14-monthly');
  if(homeEl){homeObserver=new MutationObserver(()=>{homeObserver.disconnect();home();homeObserver.observe(homeEl,{childList:true,subtree:true})});homeObserver.observe(homeEl,{childList:true,subtree:true})}
  if(goalsEl){goalsObserver=new MutationObserver(()=>{goalsObserver.disconnect();reorderGoals();goalsObserver.observe(goalsEl,{childList:true,subtree:true})});goalsObserver.observe(goalsEl,{childList:true,subtree:true})}
- if(monthlyEl){monthlyObserver=new MutationObserver(()=>{monthlyObserver.disconnect();if(!monthlyEl.hidden)splitMonthly();monthlyObserver.observe(monthlyEl,{childList:true})});monthlyObserver.observe(monthlyEl,{childList:true})}
+ if(monthlyEl){monthlyObserver=new MutationObserver(()=>{monthlyObserver.disconnect();if(!monthlyEl.hidden)splitMonthly();monthlyObserver.observe(monthlyEl,{childList:true,subtree:true})});monthlyObserver.observe(monthlyEl,{childList:true,subtree:true})}
 }
 function init(){
  const css=document.createElement('style');css.textContent=`

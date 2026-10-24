@@ -104,6 +104,7 @@ function splitMonthly(){
  const goals=monthly.querySelector('#kc-v15-goals');
  let cash=overview.querySelector('#kc-v16-cash');
  if(!cash){cash=document.createElement('div');cash.id='kc-v16-cash';overview.appendChild(cash)}
+ if(cashHeading)overview.querySelector('#kc-v16-loading')?.remove();
  // Kopieren statt verschieben: V1.4 und V1.5 aktualisieren ihre Originalelemente selbst.
  // Verschieben führte dazu, dass V1.5 die Ziele in Einnahmen/Ausgaben erneut erzeugte.
  if(cashHeading){
@@ -132,11 +133,21 @@ function createTabs(){
  if(!navEl.querySelector('[data-tab="monthOverview"]')){
   const button=document.createElement('button');button.dataset.tab='monthOverview';button.textContent='📊 Monatsübersicht';
   navEl.insertBefore(button,original||navEl.querySelector('[data-tab="family"]'));
-  button.onclick=()=>{showTab('monthOverview');setTimeout(()=>{if(!document.querySelector('#kc-v16-cash table')){original?.click();setTimeout(()=>showTab('monthOverview'),700)}},100)};
+  button.onclick=()=>{
+   // V1.4 loads the monthly data only when its own tab is opened.
+   // Trigger that load first, then return to the overview immediately.
+   if(!document.querySelector('#kc-v16-cash table')){
+    original?.click();
+    showTab('monthOverview');
+    const panel=document.getElementById('monthOverview');
+    if(panel&&!panel.querySelector('#kc-v16-cash table'))panel.innerHTML='<h2>📊 Monatsübersicht</h2><p id="kc-v16-loading">Cashflow und Sparziele werden geladen …</p>';
+    [200,700,1500,3000].forEach(delay=>setTimeout(()=>{splitMonthly();showTab('monthOverview')},delay));
+   }else{showTab('monthOverview');splitMonthly()}
+  };
  }
  if(!document.getElementById('monthOverview')){
   const panel=document.createElement('section');panel.id='monthOverview';panel.className='tab card';panel.hidden=true;monthly.after(panel);
-  panel.innerHTML='<h2>📊 Monatsübersicht</h2><p>Öffne zunächst „Einnahmen / Ausgaben“, um die Monatsdaten zu laden.</p>';
+  panel.innerHTML='<h2>📊 Monatsübersicht</h2><p>Cashflow und Sparziele werden geladen …</p>';
  }
 }
 function observe(){

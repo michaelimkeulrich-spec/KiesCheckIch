@@ -46,10 +46,13 @@ async function loadFamily(){families=await check(db.from('kc_family_parents').se
    if(nameEditor.parentElement!==$('#family'))$('#family').insertBefore(nameEditor,$('#familyList').nextSibling);
    $('#acceptBox').hidden=!!families.length;
  }
- $('#parentBox').hidden=!families.length;$('#familyChoice').innerHTML=families.map(f=>`<option value="${f.family_id}">${safe(f.kc_families?.name||'Familie')}</option>`).join('');
+ $('#parentBox').hidden=!families.length;
+ const familyChoice=document.getElementById('familyChoice');
+ if(familyChoice)familyChoice.innerHTML=families.map(f=>`<option value="${f.family_id}">${safe(f.kc_families?.name||'Familie')}</option>`).join('');
  const childNames=children.length?await check(db.from('profiles').select('id,display_name').in('id',children.map(c=>c.user_id))):[];
  const namesById=new Map(childNames.map(p=>[p.id,p.display_name]));
- $('#childChoice').innerHTML=children.map(c=>`<option value="${c.user_id}">${safe(namesById.get(c.user_id)||'Kind '+c.user_id.slice(0,8))} · ${safe(c.birth_date)}</option>`).join('');
+ const childChoice=document.getElementById('childChoice');
+ if(childChoice)childChoice.innerHTML=children.map(c=>`<option value="${c.user_id}">${safe(namesById.get(c.user_id)||'Kind '+c.user_id.slice(0,8))} · ${safe(c.birth_date)}</option>`).join('');
  await loadChildFinance();}
 async function loadChildFinance(){if(!children.length){$('#childFinance').innerHTML='<p class="muted">Noch keine Kinderkonten verbunden.</p>';return}
  const ids=children.map(c=>c.user_id);const nameRows=await check(db.from('profiles').select('id,display_name').in('id',ids));const namesById=new Map(nameRows.map(p=>[p.id,p.display_name]));const all=await check(db.from('transactions').select('user_id,amount_cents,kind,category,note,booked_on').in('user_id',ids).order('booked_on',{ascending:false}).limit(500));

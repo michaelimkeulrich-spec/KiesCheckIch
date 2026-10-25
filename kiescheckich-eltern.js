@@ -37,6 +37,9 @@ function setup(){
 }
 function directory(){
  const el=document.getElementById('kc-parent-family');if(!el)return;
+ // Save existing invitation elements before clearing the directory; keep original submit listener.
+ const preservedInviteForm=document.getElementById('childInvite');
+ const preservedInviteResult=document.getElementById('childInviteResult');
  el.innerHTML='<h2>👨‍👩‍👧 Meine Familie</h2><p class="kc-readonly">Finanzen der Kinder: nur lesen. Lediglich der Anzeigename darf hier geändert werden.</p>'+
  (children.length?children.map(c=>`<div class="item" style="display:block"><h3>${esc(c.child_name||'Kind')}</h3><p>📧 ${esc(c.child_email||'Keine E-Mail hinterlegt')}</p><form data-rename="${c.child_id}"><label>Anzeigename ändern<input name="name" maxlength="80" value="${esc(c.child_name||'')}" required></label><button type="submit" class="secondary">Namen speichern</button></form><button type="button" data-open="${c.child_id}">📊 Finanzbereich öffnen</button></div>`).join(''):'<p>Keine minderjährigen Kinderkonten gefunden.</p>');
  // Existing invitation form and its original app.js submit handler are reused.
@@ -44,8 +47,8 @@ function directory(){
  const invite=document.createElement('section');
  invite.id='kc-parent-invite';
  invite.innerHTML='<h3>✉️ Kind einladen</h3><p>E-Mail-Adresse eingeben und einen persönlichen Einladungslink erstellen. Die Einladung kann per E-Mail versendet werden.</p>';
- const form=document.getElementById('childInvite');
- const result=document.getElementById('childInviteResult');
+ const form=preservedInviteForm;
+ const result=preservedInviteResult;
  if(form&&result){
   invite.appendChild(form);
   invite.appendChild(result);

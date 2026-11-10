@@ -1,0 +1,10 @@
+KiesCheckIch V2.5 – Wochenbudget im Kaufcheck und Kopfzeile
+
+1. JavaScript-Datei in dasselbe GitHub-Verzeichnis wie index.html hochladen.
+2. In index.html unmittelbar vor </body> einfügen:
+<script src="kiescheckich-wochenbudget-kaufcheck-v25.js" defer></script>
+3. Commit speichern, Vercel-Deployment abwarten und App neu laden.
+
+Das bestehende kaufcheck.js und kiescheckich-wochenbudget.js bleiben erhalten.
+Die Warnung ist informativ und sperrt Käufe nicht.
+Keine zusätzliche Datenbankänderung nötig.
